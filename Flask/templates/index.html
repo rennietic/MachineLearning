@@ -1,0 +1,86 @@
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <link rel="stylesheet" href="{{ url_for('static', filename='style.css') }}" />
+    <title>BMI Calculator</title>
+  </head>
+  <body>
+    <header>
+      <div id="headerBMI">
+        <label>BMI Calculator</label>
+      </div>
+    </header>
+
+    <h1>Dự Đoán Chỉ Số Cơ Thể BMI</h1>
+
+    <div class="container">
+      <!-- Form bên trái -->
+      <form id="bmiForm" onsubmit="return submitForm()">
+        <label for="Feature1">Cân Nặng (kg):</label>
+        <input type="text" id="Feature1" name="Feature1" required /><br />
+
+        <label for="Feature2">Chiều Cao (cm):</label>
+        <input type="text" id="Feature2" name="Feature2" required /><br />
+
+        <label for="Feature3">Phương Pháp:</label>
+        <select name="method" id="method">
+          <option value="LinearRegression">Linear Regression</option>
+          <option value="RidgeRegression">Ridge Regression</option>
+          <option value="NeuralNetwork">Neural Network</option>
+          <option value="Stacking">Stacking</option>
+        </select><br />
+
+        <input type="submit" value="Dự đoán" />
+      </form>
+
+      <!-- Section to display prediction results -->
+      <div class="bmi-info">
+        <h2>BMI Classification</h2>
+        <ul>
+          <li>BMI &lt; 18.5: Thiếu cân</li>
+          <li>18.5 ≤ BMI &lt; 24.9: Cân nặng bình thường</li>
+          <li>25 ≤ BMI &lt; 29.9: Thừa cân</li>
+          <li>BMI ≥ 30: Béo phì</li>
+        </ul>
+
+        <!-- Section to show the prediction result -->
+        <div class="prediction" id="predictionResult"></div>
+      </div>
+    </div>
+
+    <script>
+      function submitForm() {
+        const weight = document.getElementById('Feature1').value;
+        const height = document.getElementById('Feature2').value;
+        const method = document.getElementById('method').value;
+
+        // Send data to backend using fetch
+        fetch('/prediction', {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+          },
+          body: JSON.stringify({
+            weight: weight,
+            height: height,
+            method: method
+          }),
+        })
+          .then(response => response.json())
+          .then(data => {
+            // Display the prediction result
+            document.getElementById('predictionResult').innerHTML = `
+              <p>BMI của bạn là: ${data.bmi}</p>
+              <p>Kết quả dự đoán: ${data.prediction}</p>
+            `;
+          })
+          .catch(error => console.error('Error:', error));
+
+        // Prevent form from submitting the traditional way
+        return false;
+      }
+    </script>
+  </body>
+</html>
