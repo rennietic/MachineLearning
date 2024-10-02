@@ -1,62 +1,112 @@
-import pandas as pd
-from sklearn.model_selection import train_test_split  # chia dữ liệu
-from sklearn.linear_model import LinearRegression
-from sklearn.metrics import mean_absolute_error, r2_score, mean_squared_error
 import numpy as np
+import pandas as pd
 import matplotlib.pyplot as plt
+from sklearn.model_selection import train_test_split, cross_val_score
+from sklearn.ensemble import StackingRegressor
+from sklearn.linear_model import LinearRegression, Ridge
+from sklearn.neural_network import MLPRegressor
+from sklearn.metrics import r2_score, mean_squared_error, mean_absolute_error
+import joblib 
 
-# Đọc dữ liệu
-df = pd.read_csv("bmi.csv")  # Đường dẫn tới file dữ liệu
-
-# Hiển thị vài hàng đầu tiên
-print(df.head())
-
-# Chia dữ liệu
+# Đọc dữ liệu từ file CSV
+df = pd.read_csv('bmi.csv')
 X = df[["Chieu cao", "Can nang"]]
-y = df["chi so BMI"]
+y = df['chi so BMI']
+
+# Chia dữ liệu thành tập huấn luyện và tập kiểm tra
 X_train, X_test, y_train, y_test = train_test_split(X, y, test_size=0.2, random_state=42)
 
-# Hồi quy tuyến tính
-model = LinearRegression()  # khởi tạo mô hình hồi quy tuyến tính
-model.fit(X_train, y_train)  # Bắt đầu huấn luyện
+# Huấn luyện mô hình 
+def train_linear_model(X_train, y_train):
+    model = LinearRegression()
+    model.fit(X_train, y_train)
+    return model
 
-# Dự đoán
-y_pred = model.predict(X_test)
-# Thống kê
-print("Dự đoán:", y_pred[:5])
-print("Giá trị thực tế:", y_test[:5].values)
+def train_ridge_model(X_train, y_train):
+    model = Ridge(alpha=10.0)
+    model.fit(X_train, y_train)
+    return model
 
-# Đánh giá
-mae = mean_absolute_error(y_test, y_pred)
-print("MAE:", mae)
+def train_neural_model(X_train, y_train):
+    model = MLPRegressor(hidden_layer_sizes=(50, 50), activation='relu', max_iter=1000, random_state=42)
+    model.fit(X_train, y_train)
+    return model
 
-r_squared = r2_score(y_test, y_pred)
-print("Hệ số R2:", r_squared)
+#
+linear_model = train_linear_model(X_train, y_train)
+neural_model = train_neural_model(X_train, y_train)
+ridge_model = train_ridge_model(X_train, y_train)
 
-rmse = np.sqrt(mean_squared_error(y_test, y_pred))
-print("RMSE:", rmse)
+# Lưu 
+joblib.dump(linear_model, 'linear_model.pkl')
+joblib.dump(neural_model, 'neural_model.pkl')
+joblib.dump(ridge_model, 'ridge_model.pkl')
 
-# Tính NSE (Nash-Sutcliffe Efficiency)
-def calculate_nse(y_test, y_pred):
-    numerator = np.sum((y_test - y_pred) ** 2)
-    denominator = np.sum((y_test - np.mean(y_test)) ** 2)
-    nse = 1 - (numerator / denominator)
-    return nse
+#
+y_pred_linear = linear_model.predict(X_test)
+y_pred_neural = neural_model.predict(X_test)
+y_pred_ridge = ridge_model.predict(X_test)
 
-nse = calculate_nse(y_test, y_pred)
-print("NSE:", nse)
+# Hàm đánh giá
+def evaluate_model(y_test, y_pred, model_name):
+    r2 = r2_score(y_test, y_pred)
+    mae = mean_absolute_error(y_test, y_pred)
+    rmse = np.sqrt(mean_squared_error(y_test, y_pred))
+    nse = 1 - (np.sum((y_test - y_pred)**2) / np.sum((y_test - np.mean(y_test))**2))
+    
+    print(f"--- {model_name} ---")
+    print(f"MAE: {mae:.4f}")
+    print(f"R^2: {r2:.4f}")
+    print(f"RMSE: {rmse:.4f}")
+    print(f"NSE: {nse:.4f}")
+    print()
+
+# 
+evaluate_model(y_test, y_pred_linear, "Linear Regression")
+evaluate_model(y_test, y_pred_neural, "Neural Network")
+evaluate_model(y_test, y_pred_ridge, "Ridge Regression")
+
+# Stacking
+base_models = [
+    ('linear', linear_model),
+    ('neural', neural_model),
+    ('ridge', ridge_model)
+]
+stacking_model = StackingRegressor(estimators=base_models, final_estimator=LinearRegression())
+
+stacking_model.fit(X_train, y_train)
+
+y_pred_stacking = stacking_model.predict(X_test)
+
+# Đánh giá mô hình stacking
+evaluate_model(y_test, y_pred_stacking, "Stacking")
+
+# Lưu mô hình stacking
+joblib.dump(stacking_model, 'stacking_model.pkl')
+
+# Hàm đánh giá cross-validation
+def evaluate_model_cv(model, X, y, model_name):
+    scores = cross_val_score(model, X, y, cv=5, scoring='r2')
+    print(f"--- {model_name} (Cross-validation R^2 scores) ---")
+    print(scores)
+    print(f"Mean R^2: {np.mean(scores):.4f}\n")
+
+# Đánh giá cross-validation cho các mô hình
+evaluate_model_cv(linear_model, X, y, "Linear Regression")
+evaluate_model_cv(neural_model, X, y, "Neural Network")
+evaluate_model_cv(ridge_model, X, y, "Ridge Regression")
+evaluate_model_cv(stacking_model, X, y, "Stacking")
 
 # Vẽ biểu đồ
-plt.figure(figsize=(15, 5))
-
-# Biểu đồ hồi quy tuyến tính
-plt.subplot(1, 1, 1)  # Chỉ có một biểu đồ
-plt.scatter(y_test, y_pred, color='blue', label='Dữ liệu thực tế', s=30)
+plt.figure(figsize=(10, 6))
+plt.scatter(y_test, y_pred_linear, color='blue', label='Linear Regression', s=30)
+plt.scatter(y_test, y_pred_stacking, color='green', label='Stacking', s=30)
+plt.scatter(y_test, y_pred_ridge, color='purple', label='Ridge', s=30)
+plt.scatter(y_test, y_pred_neural, color='orange', label='Neural', s=30)
 plt.plot([y.min(), y.max()], [y.min(), y.max()], color='red', linestyle='--', label='Đường hoàn hảo')
-plt.title('Hồi quy tuyến tính')
+plt.title('So sánh Linear Regression và Stacking')
 plt.xlabel('Giá trị thực tế')
 plt.ylabel('Giá trị dự đoán')
 plt.legend()
 plt.grid(True)
-
 plt.show()
